@@ -75,7 +75,8 @@
                 Background="{DynamicResource ButtonBrush}" Padding="15,8"
                 VerticalAlignment="Center">
           <StackPanel>
-            <TextBlock Text="Ctrl  +  Alt  +  X" FontWeight="Bold" FontSize="15"
+                <TextBlock Text="Win  +  Shift  +  X"
+                       FontWeight="Bold" FontSize="15"
                        HorizontalAlignment="Center"/>
             <TextBlock Text="Quick paste anywhere" FontSize="11"
                        Foreground="{DynamicResource MutedTextBrush}"/>

@@ -24,6 +24,8 @@ namespace TextClipboard
         private const uint VK_ESCAPE = 0x1B;
         private const uint MOD_ALT = 0x0001;
         private const uint MOD_CONTROL = 0x0002;
+        private const uint MOD_SHIFT = 0x0004;
+        private const uint MOD_WIN = 0x0008;
         private const uint MOD_NOREPEAT = 0x4000;
         private const uint VK_X = 0x58;
         private const byte VK_CONTROL = 0x11;
@@ -118,8 +120,10 @@ namespace TextClipboard
             _source?.AddHook(WndProc);
 
             _clipboardListenerRegistered = AddClipboardFormatListener(hwnd);
+
             _hotkeyRegistered = RegisterHotKey(
-                hwnd, HOTKEY_ID, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, VK_X);
+                hwnd, HOTKEY_ID, MOD_WIN | MOD_SHIFT | MOD_NOREPEAT, VK_X);
+
 
             if (!_clipboardListenerRegistered)
                 MessageBox.Show(this, "Could not monitor the Windows clipboard.",
@@ -127,7 +131,9 @@ namespace TextClipboard
 
             if (!_hotkeyRegistered)
                 MessageBox.Show(this,
-                    "Cannot register Ctrl + Alt + X. Another application may be using this shortcut.",
+
+                    "Cannot register Win + Shift + X. Another application may be using this shortcut.",
+
                     "Text Clipboard", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
 
@@ -322,7 +328,7 @@ namespace TextClipboard
                 "Version: 1.1.1 — Retro Edition\n" +
                 "Created: 9 October 2026\n" +
                 "Author: Maciej Gosciniak\n\n" +
-                "Global shortcut: Ctrl + Alt + X\n" +
+                "Global shortcut: Win + Shift + X\n" +
                 "Your history and saved folders are stored locally.",
                 "About Text Clipboard", MessageBoxButton.OK,
                 MessageBoxImage.Information);
