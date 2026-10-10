@@ -8,6 +8,9 @@ namespace TextClipboard
         public List<string> Recent { get; set; } = new();
         public List<TextFolder> Folders { get; set; } = new();
         public string ThemeName { get; set; } = "Olive Classic";
+        // Defaults are also applied when loading pre-1.3.0 data.json.
+        public uint HotkeyModifiers { get; set; } = HotkeyGesture.Default.Modifiers;
+        public uint HotkeyVirtualKey { get; set; } = HotkeyGesture.Default.VirtualKey;
     }
 
     public sealed class TextFolder

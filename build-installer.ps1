@@ -1,4 +1,4 @@
-﻿$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
 
 # Publish self-contained single-file .NET WPF exe (Windows x64)
@@ -26,4 +26,4 @@ if (-not $iscc) {
 
 & $iscc '.\Installer\TextClipboard.iss'
 if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed.' }
-Write-Host 'Ready: Installer\Output\TextClipboard_Setup_1.1.1.exe' -ForegroundColor Green
+Write-Host 'Ready: Installer\Output\TextClipboard_Setup_1.3.0.exe' -ForegroundColor Green

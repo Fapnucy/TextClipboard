@@ -1,5 +1,5 @@
 #define MyAppName "Text Clipboard"
-#define MyAppVersion "1.1.1"
+#define MyAppVersion "1.3.0"
 #define MyAppPublisher "Maciej Gosciniak"
 #define MyAppExeName "TextClipboard.exe"
 
@@ -14,7 +14,7 @@ DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 OutputDir=Output
-OutputBaseFilename=TextClipboard_Setup_1.1.1
+OutputBaseFilename=TextClipboard_Setup_1.3.0
 SetupIconFile=..\TextClipboard\Assets\TextClipboard.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 Compression=lzma2

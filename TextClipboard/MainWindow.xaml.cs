@@ -21,18 +21,14 @@ namespace TextClipboard
         private const int WM_HOTKEY = 0x0312;
         private const int HOTKEY_ID = 123;
         private const int ESC_HOTKEY_ID = 124;
+        private const int ALTERNATE_HOTKEY_ID = 125;
         private const uint VK_ESCAPE = 0x1B;
-        private const uint MOD_ALT = 0x0001;
-        private const uint MOD_CONTROL = 0x0002;
-        private const uint MOD_SHIFT = 0x0004;
-        private const uint MOD_WIN = 0x0008;
-        private const uint MOD_NOREPEAT = 0x4000;
-        private const uint VK_X = 0x58;
+        private const uint MOD_NOREPEAT = HotkeyGesture.NoRepeat;
         private const byte VK_CONTROL = 0x11;
         private const byte VK_V = 0x56;
         private const uint KEYEVENTF_KEYUP = 0x0002;
         private const int HISTORY_LIMIT = 10;
-        private const int MAX_TEXT_LENGTH = 10000;
+        private const int MAX_TEXT_LENGTH = 1_000_000;
 
         private readonly ClipboardLibrary _library;
         private readonly ObservableCollection<string> _recent = new();
@@ -42,6 +38,8 @@ namespace TextClipboard
         private Forms.ContextMenuStrip? _quickMenu;
         private bool _exitRequested;
         private bool _hotkeyRegistered;
+        private int _activeHotkeyId = HOTKEY_ID;
+        private HotkeyGesture _currentHotkey;
         private bool _clipboardListenerRegistered;
         private bool _storageWritable;
         private bool _quickMenuOpen;
@@ -84,9 +82,11 @@ namespace TextClipboard
         public MainWindow()
         {
             _library = DataStore.Load();
+            _currentHotkey = new HotkeyGesture(_library.HotkeyModifiers, _library.HotkeyVirtualKey);
             ThemeManager.ApplyTheme(_library.ThemeName);
             InitializeComponent();
             RefreshThemeMenuChecks();
+            UpdateHotkeyDisplay();
             _storageWritable = DataStore.LastLoadWarning == null;
 
             foreach (string value in _library.Recent.Take(HISTORY_LIMIT))
@@ -120,10 +120,8 @@ namespace TextClipboard
             _source?.AddHook(WndProc);
 
             _clipboardListenerRegistered = AddClipboardFormatListener(hwnd);
-
-            _hotkeyRegistered = RegisterHotKey(
-                hwnd, HOTKEY_ID, MOD_WIN | MOD_SHIFT | MOD_NOREPEAT, VK_X);
-
+            _hotkeyRegistered = RegisterHotKey(hwnd, _activeHotkeyId,
+                _currentHotkey.Modifiers | MOD_NOREPEAT, _currentHotkey.VirtualKey);
 
             if (!_clipboardListenerRegistered)
                 MessageBox.Show(this, "Could not monitor the Windows clipboard.",
@@ -131,9 +129,8 @@ namespace TextClipboard
 
             if (!_hotkeyRegistered)
                 MessageBox.Show(this,
-
-                    "Cannot register Win + Shift + X. Another application may be using this shortcut.",
-
+                    "Cannot register " + _currentHotkey.ToDisplayString()
+                    + ". Another application may be using this shortcut. Change it in Settings.",
                     "Text Clipboard", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
 
@@ -147,7 +144,7 @@ namespace TextClipboard
                     _ = ReadClipboardWithRetryAsync(sequence);
             }
 
-            if (msg == WM_HOTKEY && wParam.ToInt32() == HOTKEY_ID)
+            if (msg == WM_HOTKEY && _hotkeyRegistered && wParam.ToInt32() == _activeHotkeyId)
             {
                 ToggleQuickMenu();
                 handled = true;
@@ -176,8 +173,16 @@ namespace TextClipboard
                         return;
 
                     string value = Clipboard.GetText(TextDataFormat.UnicodeText);
-                    if (!string.IsNullOrWhiteSpace(value) && value.Length <= MAX_TEXT_LENGTH)
-                        AddRecentText(value);
+                    if (string.IsNullOrWhiteSpace(value))
+                        return;
+
+                    if (value.Length > MAX_TEXT_LENGTH)
+                    {
+                        StatusLabel.Text = $"Text exceeds the {MAX_TEXT_LENGTH:N0} character limit and was not saved.";
+                        return;
+                    }
+
+                    AddRecentText(value);
                     return;
                 }
                 catch (ExternalException)
@@ -218,23 +223,25 @@ namespace TextClipboard
             }
         }
 
-        private void SaveAll()
+        private bool SaveAll()
         {
             if (!_storageWritable)
             {
                 StatusLabel.Text = "Saving disabled: original data could not be read safely.";
-                return;
+                return false;
             }
 
             try
             {
                 _library.Recent = _recent.ToList();
                 DataStore.Save(_library);
+                return true;
             }
             catch (Exception ex) when (ex is System.IO.IOException
                 || ex is UnauthorizedAccessException)
             {
                 StatusLabel.Text = "Could not save data: " + ex.Message;
+                return false;
             }
         }
 
@@ -243,6 +250,7 @@ namespace TextClipboard
             HistoryCounter.Text = $"{_recent.Count} / {HISTORY_LIMIT}";
             ClearRecentButton.IsEnabled = _recent.Count > 0;
             CopyRecentButton.IsEnabled = HistoryList.SelectedItem is string;
+            PreviewRecentButton.IsEnabled = HistoryList.SelectedItem is string;
             DeleteRecentButton.IsEnabled = HistoryList.SelectedItem is string;
 
             TextFolder? folder = GetSelectedFolder();
@@ -285,6 +293,9 @@ namespace TextClipboard
 
         private void FoldersTree_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
+            // Do not deselect an item during a double-click used for editing.
+            if (e.ClickCount > 1)
+                return;
             // Preserve normal clicking on [+] / [-] expanders.
             if (FindParent<System.Windows.Controls.Primitives.ToggleButton>(
                 e.OriginalSource as DependencyObject) != null)
@@ -321,14 +332,79 @@ namespace TextClipboard
                     ThemeManager.Current.Name, StringComparison.Ordinal);
         }
 
+        private void UpdateHotkeyDisplay()
+        {
+            HotkeyHintText.Text = _currentHotkey.ToDisplayString();
+            if (_trayIcon != null)
+                _trayIcon.Text = "Text Clipboard - " + _currentHotkey.ToDisplayString();
+        }
+
+        private void Settings_Click(object sender, RoutedEventArgs e)
+        {
+            var settings = new SettingsWindow(_currentHotkey, TryApplyHotkey) { Owner = this };
+            settings.ShowDialog();
+        }
+
+        // Register the candidate under a different ID first; never leave the
+        // app without the old shortcut just because the new one is occupied.
+        private string? TryApplyHotkey(HotkeyGesture next)
+        {
+            if (!next.IsValid(out string invalidReason))
+                return invalidReason;
+
+            if (next == _currentHotkey && _hotkeyRegistered)
+                return null;
+
+            if (_source == null)
+                return "The application window is not ready yet. Please try again.";
+
+            int candidateId = _hotkeyRegistered
+                ? (_activeHotkeyId == HOTKEY_ID ? ALTERNATE_HOTKEY_ID : HOTKEY_ID)
+                : _activeHotkeyId;
+
+            bool registered = RegisterHotKey(_source.Handle, candidateId,
+                next.Modifiers | MOD_NOREPEAT, next.VirtualKey);
+            if (!registered)
+                return "Windows could not register " + next.ToDisplayString()
+                    + ". The shortcut may be reserved or already used by another application."
+                    + " Your previous shortcut has been kept.";
+
+            // Persist before releasing the original hotkey. If the data file
+            // cannot be saved, roll back the candidate registration.
+            uint priorModifiers = _library.HotkeyModifiers;
+            uint priorVirtualKey = _library.HotkeyVirtualKey;
+            _library.HotkeyModifiers = next.Modifiers;
+            _library.HotkeyVirtualKey = next.VirtualKey;
+
+            if (!SaveAll())
+            {
+                _library.HotkeyModifiers = priorModifiers;
+                _library.HotkeyVirtualKey = priorVirtualKey;
+                UnregisterHotKey(_source.Handle, candidateId);
+                return "Could not save the new shortcut to disk."
+                    + " Your previous shortcut is still active."
+                    + " See the status bar for details.";
+            }
+
+            if (_hotkeyRegistered)
+                UnregisterHotKey(_source.Handle, _activeHotkeyId);
+
+            _activeHotkeyId = candidateId;
+            _hotkeyRegistered = true;
+            _currentHotkey = next;
+            UpdateHotkeyDisplay();
+            StatusLabel.Text = "Quick Paste shortcut changed to " + next.ToDisplayString() + ".";
+            return null;
+        }
+
         private void HelpAbout_Click(object sender, RoutedEventArgs e)
         {
             MessageBox.Show(this,
                 "Text Clipboard\n" +
-                "Version: 1.1.1 — Retro Edition\n" +
-                "Created: 9 October 2026\n" +
+                "Version: 1.3.0 — Retro Edition\n" +
+                "Created: 10 October 2026\n" +
                 "Author: Maciej Gosciniak\n\n" +
-                "Global shortcut: Win + Shift + X\n" +
+                "Global shortcut: " + _currentHotkey.ToDisplayString() + "\n" +
                 "Your history and saved folders are stored locally.",
                 "About Text Clipboard", MessageBoxButton.OK,
                 MessageBoxImage.Information);
@@ -362,8 +438,23 @@ namespace TextClipboard
         private void HistoryList_MouseDoubleClick(
             object sender, MouseButtonEventArgs e)
         {
-            if (HistoryList.SelectedItem is string value)
-                CopyText(value);
+            // Double-click shows the full text without copying it immediately.
+            PreviewSelectedRecent();
+        }
+
+        private void PreviewRecent_Click(object sender, RoutedEventArgs e)
+        {
+            PreviewSelectedRecent();
+        }
+
+        private void PreviewSelectedRecent()
+        {
+            if (HistoryList.SelectedItem is not string fullText)
+                return;
+
+            var preview = new TextPreviewWindow(fullText) { Owner = this };
+            preview.CopyRequested += CopyText;
+            preview.ShowDialog();
         }
 
         private void CopyRecent_Click(object sender, RoutedEventArgs e)
@@ -470,6 +561,35 @@ namespace TextClipboard
         private void FoldersTree_SelectedItemChanged(
             object sender, RoutedPropertyChangedEventArgs<object> e) => RefreshControls();
 
+        private void FoldersTree_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        {
+            if (e.ChangedButton != MouseButton.Left)
+                return;
+
+            // Only saved text entries open the editor; double-clicking a
+            // folder continues to expand/collapse it normally.
+            var node = FindParent<TreeViewItem>(e.OriginalSource as DependencyObject);
+            if (node?.Tag is SavedText savedText)
+            {
+                e.Handled = true;
+                EditSavedText(savedText);
+            }
+        }
+
+        private void EditSavedText(SavedText savedText)
+        {
+            var editor = new TextEditDialog("Edit Text", savedText.Name,
+                savedText.Content, isFolder: false) { Owner = this };
+            if (editor.ShowDialog() != true)
+                return;
+
+            savedText.Name = editor.ItemName;
+            savedText.Content = editor.ItemContent;
+            RebuildFolderTree();
+            SaveAll();
+            StatusLabel.Text = "Saved text updated: " + savedText.Name;
+        }
+
         private void AddFolder_Click(object sender, RoutedEventArgs e)
         {
             var editor = new TextEditDialog("New Folder", "New Folder", "", isFolder: true)
@@ -524,17 +644,8 @@ namespace TextClipboard
             }
             else if (node?.Tag is SavedText text)
             {
-                var editor = new TextEditDialog("Edit Text", text.Name, text.Content, false)
-                {
-                    Owner = this
-                };
-                if (editor.ShowDialog() == true)
-                {
-                    text.Name = editor.ItemName;
-                    text.Content = editor.ItemContent;
-                }
-                else
-                    return;
+                EditSavedText(text);
+                return;
             }
             else
                 return;
@@ -802,7 +913,7 @@ namespace TextClipboard
             _trayIcon = new Forms.NotifyIcon
             {
                 Icon = icon,
-                Text = "Text Clipboard",
+                Text = "Text Clipboard - " + _currentHotkey.ToDisplayString(),
                 ContextMenuStrip = _trayMenu,
                 Visible = true
             };
@@ -853,7 +964,7 @@ namespace TextClipboard
                     _escapeHotkeyRegistered = false;
                 }
                 if (_hotkeyRegistered)
-                    UnregisterHotKey(_source.Handle, HOTKEY_ID);
+                    UnregisterHotKey(_source.Handle, _activeHotkeyId);
                 if (_clipboardListenerRegistered)
                     RemoveClipboardFormatListener(_source.Handle);
                 _source.RemoveHook(WndProc);

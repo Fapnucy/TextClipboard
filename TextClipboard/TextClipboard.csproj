@@ -7,7 +7,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
     <AssemblyName>TextClipboard</AssemblyName>
-    <Version>1.1.1</Version>
+    <Version>1.3.0</Version>
     <ApplicationIcon>Assets\TextClipboard.ico</ApplicationIcon>
     <Authors>Maciej Gosciniak</Authors>
     <Copyright>Copyright (c) 2026 Maciej Gosciniak</Copyright>

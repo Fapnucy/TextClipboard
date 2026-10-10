@@ -39,6 +39,13 @@ namespace TextClipboard
                     ?? new ClipboardLibrary();
 
                 data.ThemeName ??= "Olive Classic";
+                var shortcut = new HotkeyGesture(data.HotkeyModifiers, data.HotkeyVirtualKey);
+                if (!shortcut.IsValid(out _))
+                {
+                    // Invalid/unsupported settings must never prevent app startup.
+                    data.HotkeyModifiers = HotkeyGesture.Default.Modifiers;
+                    data.HotkeyVirtualKey = HotkeyGesture.Default.VirtualKey;
+                }
                 data.Recent ??= new();
                 data.Folders ??= new();
                 data.Recent = data.Recent
