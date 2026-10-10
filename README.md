@@ -144,3 +144,13 @@ GitHub: [@Fapnucy](https://github.com/Fapnucy)
 ---
 
 **Text Clipboard — Keep your text organized, accessible, and ready to paste.**
+
+
+
+## Copyright
+
+Copyright © 2026 Maciej Gosciniak. All rights reserved.
+
+Text Clipboard is not an open-source licensed project.
+
+The source code is publicly available for reference purposes only. Except as permitted by GitHub's Terms of Service or applicable law, copying, modifying, or redistributing the source code requires prior written permission from the copyright holder.
