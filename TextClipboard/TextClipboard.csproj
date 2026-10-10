@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>TextClipboard</AssemblyName>
+    <Version>1.1.1</Version>
+    <ApplicationIcon>Assets\TextClipboard.ico</ApplicationIcon>
+    <Authors>Maciej Gosciniak</Authors>
+    <Copyright>Copyright (c) 2026 Maciej Gosciniak</Copyright>
+    <RootNamespace>TextClipboard</RootNamespace>
+  </PropertyGroup>
+</Project>
